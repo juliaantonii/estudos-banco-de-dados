@@ -116,10 +116,10 @@ CREATE TABLE PAGAMENTO (
 	ano_pgto INT NOT NULL,
 	mes_pgto INT NOT NULL,
 	matricula INT NOT NULL,
-	valor DECIMAL NOT NULL, -- meio = salario_fixo | costureira = salario
-	gratificacao DECIMAL, -- meio = gratificacao | costureira = 0
-	produtividade DECIMAL, -- meio = 0 | costureira = Valor a ser calculado
-	salario_bruto DECIMAL NOT NULL, -- meio = valor + gratificacao | costureira = valor + produtividade(qt_vend * preco_pec * aliquota_fixa)
+	valor DECIMAL(10,2) NOT NULL, -- meio = salario_fixo | costureira = salario
+	gratificacao DECIMAL(10,2), -- meio = gratificacao | costureira = 0
+	produtividade DECIMAL(10,2), -- meio = 0 | costureira = Valor a ser calculado
+	salario_bruto DECIMAL(10,2) NOT NULL, -- meio = valor + gratificacao | costureira = valor + produtividade(qt_vend * preco_pec * aliquota_fixa)
 	PRIMARY KEY (ano_pgto, mes_pgto, matricula),
 	FOREIGN KEY (matricula) REFERENCES funcionario (matricula)
 );
@@ -132,13 +132,66 @@ CREATE TABLE PAGAMENTO (
 
 CREATE OR REPLACE PROCEDURE sp_calcula_pgto(mes INT, ano INT)
 AS $$
+DECLARE 
+    -- Variáveis para os registros das iterações
+    reg_meio RECORD;
+    reg_cost RECORD;
+    
+    -- Variáveis de cálculo
+    v_salario_bruto DECIMAL(10,2);
+    v_produtividade DECIMAL(10,2);
 BEGIN
-	SELECT id_matricula as 
-	IF 
-	INSERT INTO PAGAMENTO VALUES (ano, mes, )
-	VALUES (id_pgto, )
+
+    --------------------------------------------------------------------
+    -- 1. PROCESSA FUNCIONÁRIOS DA ÁREA MEIO
+    --------------------------------------------------------------------
+    -- O FOR ... IN percorre cada linha retornada pela consulta automaticamente
+    FOR reg_meio IN 
+        SELECT m.matricula, m.salario_fixo, COALESCE(m.gratificacao, 0) AS gratificacao
+        FROM meio as m
+    LOOP
+        -- Acesso aos campos via reg_meio.nome_do_campo
+        v_salario_bruto := reg_meio.salario_fixo + reg_meio.gratificacao;
+        
+        INSERT INTO PAGAMENTO (
+            ano_pgto, mes_pgto, matricula, valor, gratificacao, produtividade, salario_bruto
+        ) VALUES (
+            ano, mes, reg_meio.matricula, reg_meio.salario_fixo, reg_meio.gratificacao, 0.00, v_salario_bruto
+        );
+    END LOOP;
+
+    --------------------------------------------------------------------
+    -- 2. PROCESSA COSTUREIRAS
+    --------------------------------------------------------------------
+    FOR reg_cost IN 
+        SELECT c.matricula, c.valor_minimo, c.aliquota_fixa
+        FROM costureira as c
+    LOOP
+        -- Calcula a produtividade INDIVIDUAL desta costureira específica no mês/ano
+        SELECT COALESCE(SUM(1 * pc.preco_venda * reg_cost.aliquota_fixa), 0.00)
+        INTO v_produtividade
+        FROM producao as p
+        JOIN peca as pc ON p.id_peca = pc.id_peca
+        WHERE p.matricula = reg_cost.matricula
+          AND EXTRACT(MONTH FROM p.dt_ini) = mes
+          AND EXTRACT(YEAR FROM p.dt_ini) = ano;
+
+        -- Renda Total = Valor Mínimo + Produtividade
+        v_salario_bruto := reg_cost.valor_minimo + v_produtividade;
+        
+        INSERT INTO PAGAMENTO (
+            ano_pgto, mes_pgto, matricula, valor, gratificacao, produtividade, salario_bruto
+        ) VALUES (
+            ano, mes, reg_cost.matricula, reg_cost.valor_minimo, 0.00, v_produtividade, v_salario_bruto
+        );
+    END LOOP;
+
 END;
 $$ LANGUAGE 'plpgsql';
+
+CALL sp_calcula_pgto(8, 2023);
+
+SELECT * FROM PAGAMENTO ORDER BY matricula;
 
 /*
 REFLEXÃO TÉCNICA:
