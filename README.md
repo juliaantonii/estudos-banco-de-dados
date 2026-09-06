@@ -1,4 +1,4 @@
-# ₊˚🖇️ Estudos de Banco de Dados ₊˚🎧⊹
+# ₊˚🖇️ Estudos de Banco de Dados ₊˚⊹
 
 Este repositório contém anotações teóricas, diagramas e scripts práticos elaborados durante meus estudos de Banco de Dados Relacionais (RDBMS) e (raramente) Não-Relacionais (NoSQL).
 
