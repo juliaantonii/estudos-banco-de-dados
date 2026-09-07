@@ -167,11 +167,6 @@ $$ LANGUAGE 'plpgsql';
 
 CALL sp_processa_totais_vendas();
 
-
--- ====================================================================
--- QUESTÕES FINAIS (8, 9 E 10) — PARA RESOLVER
--- ====================================================================
-
 /*
 8. Validação de Transação e Manipulação de Estoque:
 Crie uma procedure sp_registrar_item_venda(p_id_venda INT, p_id_produto INT, p_quantidade INT) que:
@@ -186,6 +181,42 @@ Crie uma procedure sp_registrar_item_venda(p_id_venda INT, p_id_produto INT, p_q
 
 -- Escreva seu código da questão 8 aqui:
 
+CREATE OR REPLACE PROCEDURE sp_registrar_item_venda(p_id_venda INT, p_id_produto INT, p_quantidade INT)
+AS $$
+DECLARE p_modelo VARCHAR(100);
+		p_estoque INT;
+		p_preco_unitario DECIMAL(10,2);
+		p_qtd_prod INT;
+BEGIN
+	SELECT modelo, estoque, preco_unitario INTO p_modelo, p_estoque, p_preco_unitario
+	FROM produto
+	WHERE id_produto = p_id_produto;
+
+	SELECT quantidade INTO p_qtd_prod
+	FROM item_venda
+	WHERE id_venda = p_id_venda;
+
+	IF p_estoque >= p_quantidade THEN
+		INSERT INTO item_venda VALUES(p_id_venda, p_id_produto, p_quantidade, (p_preco_unitario * p_quantidade));
+
+		UPDATE produto
+		SET estoque = p_estoque - p_quantidade
+		WHERE id_produto = p_id_produto;
+
+		RAISE NOTICE 'Item registrado com sucesso!';
+	ELSE
+		RAISE NOTICE 'Estoque insuficiente para o produto %', p_modelo;
+	END IF;
+
+END;
+$$ LANGUAGE 'plpgsql';
+
+CALL sp_registrar_item_venda(2, 104, 2);
+
+SELECT * FROM cliente;
+SELECT * FROM produto;
+SELECT * FROM venda;
+SELECT * FROM item_venda;
 
 
 /*
